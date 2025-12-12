@@ -292,17 +292,3 @@ Expected output shows:
 - Performance metrics
 
 ---
-
-## Dependencies
-
-- **pandas**: Data manipulation and time-series operations
-- **lark**: DSL parsing
-- **numpy**: Numerical computations (used in indicators)
-
-See `requirements.txt` for exact versions.
-
----
-
-## License
-
-This is a prototype project for educational/demonstration purposes.
