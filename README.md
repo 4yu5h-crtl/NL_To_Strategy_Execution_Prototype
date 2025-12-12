@@ -111,23 +111,9 @@ Win Rate:          66.67%
 
 ## DSL Specification
 
-See **[dsl_spec.md](dsl_spec.md)** for complete grammar documentation.
+For complete DSL documentation including grammar rules, operators, indicators, cross detection logic, design decisions, and extension guide, see **[dsl_spec.md](dsl_spec.md)**.
 
-### **Supported Features**
-
-**Operators:**
-- Comparison: `>`, `<`, `>=`, `<=`, `==`
-- Logical: `AND`, `OR`
-- Cross: `CROSSOVER`, `CROSSUNDER`, `CROSS`
-
-**Indicators:**
-- `SMA(series, period)` - Simple Moving Average
-- `RSI(series, period)` - Relative Strength Index
-
-**Data Fields:**
-- `close`, `open`, `high`, `low`, `volume`
-
-**Example DSL:**
+**Quick Reference:**
 ```
 ENTRY: close > SMA(close, 20) AND volume > 1000000
 EXIT: RSI(close, 14) < 30
@@ -135,61 +121,62 @@ EXIT: RSI(close, 14) < 30
 
 ---
 
-## Architecture
+## Architecture Overview
 
-### **1. Natural Language Parsing** (`nl_to_structured.py`)
-- Uses regex-based pattern matching
-- Converts NL to structured JSON
-- Preserves semantic meaning (e.g., "crosses above" vs "crosses below")
+### **Pipeline Components**
 
-### **2. DSL Generation** (`nl_to_structured.py`)
-- Converts structured JSON to DSL text
-- Emits `CROSSOVER`/`CROSSUNDER` for directional crosses
+1. **Natural Language Parser** (`nl_to_structured.py`)
+   - Converts natural language to structured JSON representation
+   - Uses regex-based pattern matching for common trading phrases
+   - Preserves semantic meaning (e.g., "crosses above" vs "crosses below")
 
-### **3. DSL Parsing** (`dsl_parser.py`)
-- Uses Lark parser with LALR grammar
-- Validates syntax
-- Builds Abstract Syntax Tree
+2. **DSL Generator** (`nl_to_structured.py`)
+   - Transforms structured JSON into DSL text
+   - Emits directional cross operators (`CROSSOVER`/`CROSSUNDER`)
 
-### **4. AST Nodes** (`ast_nodes.py`)
-- Defines node types: `Strategy`, `EntryRule`, `ExitRule`, `CrossOver`, `CrossUnder`, `Comparison`, `LogicalOperation`, `Indicator`, etc.
+3. **DSL Parser** (`dsl_parser.py`)
+   - Lark-based LALR parser with formal grammar
+   - Validates syntax and builds Abstract Syntax Tree
+   - Provides informative error messages
 
-### **5. Code Generation** (`code_generator.py`)
-- Visitor pattern to traverse AST
-- Generates pandas/Python expressions
-- Handles indicator pre-computation
+4. **AST Nodes** (`ast_nodes.py`)
+   - Defines typed node classes for the AST
+   - Node types: `Strategy`, `EntryRule`, `ExitRule`, `CrossOver`, `Comparison`, `LogicalOperation`, `Indicator`, etc.
 
-### **6. Backtesting** (`backtest.py`)
-- Simple event-driven simulator
-- Tracks entry/exit signals
-- Calculates P&L, drawdown, win rate
+5. **Code Generator** (`code_generator.py`)
+   - Visitor pattern to traverse AST
+   - Generates executable pandas/Python expressions
+   - Pre-computes indicators and handles signal logic
+
+6. **Backtest Simulator** (`backtest.py`)
+   - Event-driven backtesting engine
+   - Tracks positions, entry/exit signals
+   - Calculates performance metrics: P&L, drawdown, win rate
 
 ---
 
-## Cross Detection Logic
+## Backtest Metrics
 
-**Crossover** (A crosses above B):
-```python
-(A > B) & (A.shift(1) <= B.shift(1))
-```
+The backtest simulator calculates the following metrics:
 
-**Crossunder** (A crosses below B):
-```python
-(A < B) & (A.shift(1) >= B.shift(1))
-```
-
-This ensures we detect the exact moment when one series crosses another.
+- **Entry/Exit Dates**: Timestamp of each trade
+- **Entry/Exit Prices**: Execution price (close price)
+- **Profit/Loss**: Dollar and percentage return per trade
+- **Total Return**: Overall portfolio performance
+- **Max Drawdown**: Largest peak-to-trough decline
+- **Number of Trades**: Total completed trades
+- **Win Rate**: Percentage of profitable trades
 
 ---
 
 ## Sample Data
 
-`sample_data_long.csv` contains 200 rows of synthetic OHLCV data with:
-- Date range: 2023-01-01 to 2023-07-19
-- Price range: ~$93 to ~$119
-- Trending behavior to ensure SMA crossovers occur
+`sample_data_long.csv` contains 200 rows of synthetic OHLCV data:
+- **Date range**: 2023-01-01 to 2023-07-19
+- **Price range**: ~$93 to ~$119
+- **Characteristics**: Trending behavior to ensure SMA crossovers occur
 
-Format:
+**Format:**
 ```csv
 Date,open,high,low,close,volume
 2023-01-01,100.5,102.3,99.8,101.2,1050000
@@ -198,97 +185,100 @@ Date,open,high,low,close,volume
 
 ---
 
-## Design Decisions
-
-### **1. Why CROSSOVER/CROSSUNDER instead of CROSS?**
-- Preserves semantic direction from natural language
-- Avoids ambiguity in cross detection
-- Makes DSL more explicit and readable
-
-### **2. Why Lark for parsing?**
-- Clean grammar definition
-- Built-in AST transformation
-- Good error messages
-- LALR parser is efficient
-
-### **3. Why visitor pattern for code generation?**
-- Clean separation of concerns
-- Easy to extend with new node types
-- Follows compiler design best practices
-
-### **4. Why pandas for backtesting?**
-- Vectorized operations are fast
-- Natural fit for time-series data
-- Easy indicator computation with `.rolling()`, `.shift()`, etc.
-
----
-
 ## Extending the System
 
-### **Add a new indicator:**
+### **Add a New Indicator**
 
-1. Add function to `utils/indicators.py`:
-```python
-def ema(series: pd.Series, period: int) -> pd.Series:
-    return series.ewm(span=period).mean()
-```
+1. Implement function in `utils/indicators.py`
+2. Update NL parser in `nl_to_structured.py` to recognize the indicator
+3. Add visitor method in `code_generator.py`
+4. Update DSL grammar in `dsl_parser.py` if needed
+5. Document in `dsl_spec.md`
 
-2. Update NL parser to recognize "EMA" patterns
-
-3. Add visitor method to code generator:
-```python
-def visit_Indicator(self, node):
-    if node.name == 'EMA':
-        # handle EMA
-```
-
-### **Add a new operator:**
+### **Add a New Operator**
 
 1. Update DSL grammar in `dsl_parser.py`
-2. Add AST node in `ast_nodes.py`
-3. Add visitor method in `code_generator.py`
+2. Add corresponding AST node in `ast_nodes.py`
+3. Implement visitor method in `code_generator.py`
+4. Document in `dsl_spec.md`
 
----
-
-## Limitations & Assumptions
-
-1. **Natural Language Parsing**: 
-   - Supports specific patterns (see examples)
-   - Not a full NLP engine
-   - Uses regex-based matching
-
-2. **Backtesting**:
-   - Simple event-driven model
-   - No slippage, commissions, or position sizing
-   - Assumes fills at close price
-
-3. **Data**:
-   - Requires OHLCV format
-   - Assumes daily frequency
-   - No handling of missing data
-
-4. **Indicators**:
-   - Currently supports SMA and RSI
-   - Can be extended easily
+See `dsl_spec.md` for detailed extension examples.
 
 ---
 
 ## Testing
 
-The demo script (`demo.py`) serves as the main test. It demonstrates:
-- ✅ NL → DSL conversion
-- ✅ DSL parsing
-- ✅ AST construction
-- ✅ Code generation
-- ✅ Indicator computation
-- ✅ Signal detection
-- ✅ Backtest execution
+Run the demo script to validate the entire pipeline:
 
-Expected output shows:
-- Generated DSL
-- Generated code
+```bash
+python demo.py
+```
+
+**What it tests:**
+- ✅ Natural language → DSL conversion
+- ✅ DSL parsing and validation
+- ✅ AST construction
+- ✅ Python code generation
+- ✅ Indicator computation
+- ✅ Entry/exit signal detection
+- ✅ Backtest execution and metrics
+
+**Expected output:**
+- Generated DSL text
+- Generated Python code
 - Signal counts
-- Trade details
-- Performance metrics
+- Trade log with entry/exit details
+- Performance summary
+
+---
+
+## Limitations & Assumptions
+
+### **Natural Language Parsing**
+- Supports specific patterns (not a full NLP engine)
+- Uses regex-based matching for common trading phrases
+- See `nl_to_structured.py` for supported patterns
+
+### **Backtesting**
+- Simple event-driven model
+- No slippage, commissions, or position sizing
+- Assumes fills at close price
+- Long-only positions (no short selling)
+
+### **Data Requirements**
+- OHLCV format with columns: `Date`, `open`, `high`, `low`, `close`, `volume`
+- Assumes daily frequency (can be adapted)
+- No handling of missing data
+
+### **Indicators**
+- Currently supports SMA and RSI
+- Easily extensible (see "Extending the System")
+
+---
+
+## Dependencies
+
+- **pandas**: Data manipulation and time-series operations
+- **lark**: DSL parsing with LALR grammar
+- **numpy**: Numerical computations (used in indicators)
+
+Install all dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+---
+
+## Assignment Deliverables
+
+This project fulfills all required deliverables:
+
+1. ✅ **DSL Design Document** - See `dsl_spec.md`
+2. ✅ **NL → Structured Representation** - `nl_to_structured.py`
+3. ✅ **DSL Parser + AST Builder** - `dsl_parser.py` + `ast_nodes.py`
+4. ✅ **AST → Python Generator** - `code_generator.py`
+5. ✅ **Backtest Simulator** - `backtest.py`
+6. ✅ **End-to-End Demo** - `demo.py`
+7. ✅ **README with Instructions** - This file
 
 ---
